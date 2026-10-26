@@ -2,6 +2,33 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import { detectSilhouette } from "./services/poseDetection";
+const POSE_CONNECTIONS = [
+  // Face
+  [0, 1], [1, 2], [2, 3], [3, 7],
+  [0, 4], [4, 5], [5, 6], [6, 8],
+
+  // Shoulders and arms
+  [11, 12],
+  [11, 13], [13, 15],
+  [12, 14], [14, 16],
+
+  // Torso
+  [11, 23], [12, 24], [23, 24],
+
+  // Left hand and arm
+  [15, 17], [15, 19], [15, 21],
+
+  // Right hand and arm
+  [16, 18], [16, 20], [16, 22],
+
+  // Legs
+  [23, 25], [25, 27],
+  [24, 26], [26, 28],
+
+  // Feet
+  [27, 29], [29, 31], [27, 31],
+  [28, 30], [30, 32], [28, 32],
+];
 
 function getShoppingLinks(query) {
   const search = encodeURIComponent(query);
@@ -250,6 +277,60 @@ function App() {
               />
             )}
 
+{analysis?.landmarks && photo && photoImageRef.current && (
+  <svg
+    className="pose-overlay"
+    viewBox={`0 0 ${photoImageRef.current.naturalWidth} ${photoImageRef.current.naturalHeight}`}
+    preserveAspectRatio="xMidYMid meet"
+    aria-label="Detected body landmarks and skeleton"
+  >
+    {/* Draw connections between body landmarks */}
+    {POSE_CONNECTIONS.map(([start, end], index) => {
+      const landmarks = analysis.landmarks;
+      const first = landmarks[start];
+      const second = landmarks[end];
+
+      if (!first || !second) return null;
+
+      if (
+        (first.visibility ?? 1) < 0.5 ||
+        (second.visibility ?? 1) < 0.5
+      ) {
+        return null;
+      }
+
+      return (
+        <line
+          key={`connection-${index}`}
+          x1={first.x * photoImageRef.current.naturalWidth}
+          y1={first.y * photoImageRef.current.naturalHeight}
+          x2={second.x * photoImageRef.current.naturalWidth}
+          y2={second.y * photoImageRef.current.naturalHeight}
+          className="pose-connection"
+        />
+      );
+    })}
+
+    {/* Draw a circle at each visible landmark */}
+    {analysis.landmarks.map((point, index) => {
+      if ((point.visibility ?? 1) < 0.5) return null;
+
+      return (
+        <circle
+          key={`landmark-${index}`}
+          cx={point.x * photoImageRef.current.naturalWidth}
+          cy={point.y * photoImageRef.current.naturalHeight}
+          r={Math.max(
+            3,
+            photoImageRef.current.naturalWidth * 0.004
+          )}
+          className="pose-point"
+        />
+      );
+    })}
+  </svg>
+)}
+
             {!cameraOn && !photo && (
               <div className="camera-empty">
                 <div className="camera-icon">◉</div>
@@ -391,16 +472,47 @@ function App() {
               </h2>
 
               {analysis && (
-                <>
-                  <p className="results-note">
-                    {analysis.observation}
-                  </p>
+  <div className="body-analysis-results">
+    <div className="analysis-stat">
+      <span className="analysis-stat-number">
+        {analysis.landmarks?.length ?? 0}
+      </span>
 
-                  <p className="results-note analysis-disclaimer">
-                    {analysis.note}
-                  </p>
-                </>
-              )}
+      <span className="analysis-stat-label">
+        Body landmarks detected
+      </span>
+    </div>
+
+    <p className="results-note">
+      {analysis.observation}
+    </p>
+
+    <p className="results-note analysis-disclaimer">
+      {analysis.note}
+    </p>
+
+    <h3 className="landmarks-heading">
+      Detected landmarks
+    </h3>
+
+    <div className="landmarks-list">
+      {(analysis.landmarks ?? [])
+        .filter((point) => (point.visibility ?? 1) > 0.5)
+        .map((point) => (
+          <div
+            className="landmark-item"
+            key={point.name}
+          >
+            <span>{point.name}</span>
+
+            <span>
+              {`(${point.x.toFixed(2)}, ${point.y.toFixed(2)})`}
+            </span>
+          </div>
+        ))}
+    </div>
+  </div>
+)}
 
               <div className="suggestion-carousel">
                 {suggestions.map((item) => (
