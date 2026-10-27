@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import { detectSilhouette } from "./services/poseDetection";
+import { analyzeBodyProportions } from "./services/bodyAnalysis";
 const POSE_CONNECTIONS = [
   // Face
   [0, 1], [1, 2], [2, 3], [3, 7],
@@ -207,11 +208,24 @@ function App() {
 
     try {
       await image.decode();
-
+      // Pass the decoded HTMLImageElement to the detector, not the URL string.
       const result = await detectSilhouette(image);
 
-      setAnalysis(result);
-      setSuggestions(result.recommendations);
+      if (!result?.landmarks || !Array.isArray(result.landmarks)) {
+        throw new Error(
+          "No body landmarks detected. Please try a clear, full-body image."
+        );
+      }
+
+      const bodyAnalysis = analyzeBodyProportions(result.landmarks);
+
+      setAnalysis({
+        ...result,
+        bodyAnalysis,
+      });
+      setSuggestions(
+        Array.isArray(result.recommendations) ? result.recommendations : []
+      );
       setShowSuggestions(true);
     } catch (err) {
       setError(
@@ -490,6 +504,27 @@ function App() {
     <p className="results-note analysis-disclaimer">
       {analysis.note}
     </p>
+
+    {analysis.bodyAnalysis?.proportions && (
+      <>
+        <h3 className="landmarks-heading">Approximate body proportions</h3>
+        <div className="landmarks-list">
+          {Object.entries(analysis.bodyAnalysis.proportions).map(([label, value]) => (
+            <div className="landmark-item" key={label}>
+              <span>
+                {label
+                  .replace(/([A-Z])/g, " $1")
+                  .replace(/^./, (character) => character.toUpperCase())}
+              </span>
+              <span>{value === null ? "Unavailable" : value}</span>
+            </div>
+          ))}
+        </div>
+        <p className="results-note analysis-disclaimer">
+          {analysis.bodyAnalysis.note}
+        </p>
+      </>
+    )}
 
     <h3 className="landmarks-heading">
       Detected landmarks
